@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[resource]
+resource_name = "Wood-Grain"
+cull_mode = 2
+albedo_color = Color(0.639, 0.477, 0.314, 1)
+metallic_specular = 0.15
+roughness = 0.8
