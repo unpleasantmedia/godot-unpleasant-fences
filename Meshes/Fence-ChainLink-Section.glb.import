@@ -4,10 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://d0jbeo6wjcc21"
+path="res://.godot/imported/Fence-ChainLink-Section.glb-8a3e926f0fac29f549aa540d051b2241.scn"
 
 [deps]
 
 source_file="res://addons/unpleasant_fences/Meshes/Fence-ChainLink-Section.glb"
+dest_files=["res://.godot/imported/Fence-ChainLink-Section.glb-8a3e926f0fac29f549aa540d051b2241.scn"]
 
 [params]
 

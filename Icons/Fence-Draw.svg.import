@@ -2,6 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
+uid="uid://kif4jl5e2dfi"
+path="res://.godot/imported/Fence-Draw.svg-1248fdcef65c010c09c531731320298e.ctex"
 metadata={
 "vram_texture": false
 }
@@ -9,6 +11,7 @@ metadata={
 [deps]
 
 source_file="res://addons/unpleasant_fences/Icons/Fence-Draw.svg"
+dest_files=["res://.godot/imported/Fence-Draw.svg-1248fdcef65c010c09c531731320298e.ctex"]
 
 [params]
 

@@ -30,8 +30,8 @@ public static class FenceLinks
     public static Func<Node, IReadOnlyList<(Vector3 A, Vector3 B)>>? SnapLines { get; set; }
 
     /// <summary>
-    /// The folder of the gates' scenes, each named Fence-(kind)-Gate.tscn, as a gate's leaf needs a
-    /// script of the project's own to swing. Without one, a gate is a gap in the fence.
+    /// The path of a script to use on gates' leaves in place of <see cref="FenceGate"/>, for gates that
+    /// work as a project's own doors do. It has to be an AnimatableBody3D's, with an OpenAngle.
     /// </summary>
-    public static string? GateFolder { get; set; }
+    public static string? GateScript { get; set; }
 }

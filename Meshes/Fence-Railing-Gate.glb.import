@@ -4,10 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://cx5ghl2n5mitg"
+path="res://.godot/imported/Fence-Railing-Gate.glb-beefe61261a0a508f62fae8673818415.scn"
 
 [deps]
 
 source_file="res://addons/unpleasant_fences/Meshes/Fence-Railing-Gate.glb"
+dest_files=["res://.godot/imported/Fence-Railing-Gate.glb-beefe61261a0a508f62fae8673818415.scn"]
 
 [params]
 

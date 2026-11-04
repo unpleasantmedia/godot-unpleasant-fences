@@ -4,10 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dtxpperh07iwh"
+path="res://.godot/imported/Fence-Privacy-Section.glb-ef6cdc1577e5ce2a670f5d77bfe349b5.scn"
 
 [deps]
 
 source_file="res://addons/unpleasant_fences/Meshes/Fence-Privacy-Section.glb"
+dest_files=["res://.godot/imported/Fence-Privacy-Section.glb-ef6cdc1577e5ce2a670f5d77bfe349b5.scn"]
 
 [params]
 

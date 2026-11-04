@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M64 112L92.0 64L120 112L120 300L64 300Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M292 112L320.0 64L348 112L348 300L292 300Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M520 112L548.0 64L576 112L576 300L520 300Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M120 160H292V196H120Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M348 160H520V196H348Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M64 388L92.0 340L120 388L120 576L64 576Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M292 388L320.0 340L348 388L348 576L292 576Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M520 388L548.0 340L576 388L576 576L520 576Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M120 436H292V472H120Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M348 436H520V472H348Z"/>
+</svg>

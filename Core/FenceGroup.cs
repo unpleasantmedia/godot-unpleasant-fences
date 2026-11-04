@@ -9,6 +9,7 @@ namespace UnpleasantMedia.UnpleasantFences;
 /// </summary>
 [Tool]
 [GlobalClass]
+[Icon("res://addons/unpleasant_fences/Icons/Fence-Group.svg")]
 public partial class FenceGroup : Node3D
 {
     /// <summary>Builds all its fences again: after the ground or the roads under them have changed.</summary>

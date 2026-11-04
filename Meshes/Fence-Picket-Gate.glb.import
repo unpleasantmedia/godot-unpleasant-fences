@@ -4,10 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dlevf0jh2mu7h"
+path="res://.godot/imported/Fence-Picket-Gate.glb-3e09c4e1404083e1ffa67be2148ff568.scn"
 
 [deps]
 
 source_file="res://addons/unpleasant_fences/Meshes/Fence-Picket-Gate.glb"
+dest_files=["res://.godot/imported/Fence-Picket-Gate.glb-3e09c4e1404083e1ffa67be2148ff568.scn"]
 
 [params]
 

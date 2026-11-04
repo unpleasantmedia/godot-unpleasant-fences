@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/unpleasant_fences/Core/FenceGate.cs" id="1_door"]
+[ext_resource type="PackedScene" path="res://addons/unpleasant_fences/Meshes/Fence-ChainLink-Gate.glb" id="2_leaf"]
+[ext_resource type="PackedScene" path="res://addons/unpleasant_fences/Meshes/Fence-ChainLink-Gate-Mesh.glb" id="3_mesh"]
+
+[sub_resource type="BoxShape3D" id="Box"]
+size = Vector3(0.92, 1.950, 0.06)
+
+[node name="Fence-ChainLink-Gate" type="Node3D"]
+editor_description = "A fence's gate, hung by Fence where one is asked for."
+
+[node name="Leaf" type="AnimatableBody3D" parent="."]
+script = ExtResource("1_door")
+
+[node name="Model" parent="Leaf" instance=ExtResource("2_leaf")]
+
+[node name="Mesh" parent="Leaf" instance=ExtResource("3_mesh")]
+
+[node name="Shape" type="CollisionShape3D" parent="Leaf"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 1.025, 0)
+shape = SubResource("Box")

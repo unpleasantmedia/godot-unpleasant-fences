@@ -25,6 +25,7 @@ public enum FenceKind
 /// </summary>
 [Tool]
 [GlobalClass]
+[Icon("res://addons/unpleasant_fences/Icons/Fence.svg")]
 public partial class Fence : Node3D
 {
     /// <summary>
@@ -43,6 +44,7 @@ public partial class Fence : Node3D
     private bool Reloading => IsInsideTree() && !_reloadSettled;
 
     private const string Meshes = "res://addons/unpleasant_fences/Meshes";
+    private const string Scenes = "res://addons/unpleasant_fences/Scenes";
 
     /// <summary>A kind's height, how far apart its posts are at most, and how wide its posts are (half).</summary>
     private static readonly Dictionary<FenceKind, (float Height, float Spacing, float HalfPost, float Thick)> Specs = new()
@@ -315,12 +317,23 @@ public partial class Fence : Node3D
             body.AddChild(new CollisionShape3D { Shape = new ConcavePolygonShape3D { Data = faces, BackfaceCollision = true } });
         }
 
-        if (gates.Count > 0 && FenceLinks.GateFolder is { } folder && ResourceLoader.Exists($"{folder}/Fence-{name}-Gate.tscn"))
+        if (gates.Count > 0 && ResourceLoader.Exists($"{Scenes}/Fence-{name}-Gate.tscn"))
         {
-            var scene = GD.Load<PackedScene>($"{folder}/Fence-{name}-Gate.tscn");
+            var scene = GD.Load<PackedScene>($"{Scenes}/Fence-{name}-Gate.tscn");
             foreach (var place in gates)
             {
                 var gate = scene.Instantiate<Node3D>();
+                if (FenceLinks.GateScript is { } script)
+                {
+                    foreach (var leaf in gate.FindChildren("*", nameof(AnimatableBody3D), true, false).OfType<FenceGate>().ToList())
+                    {
+                        var (angle, path) = (leaf.OpenAngle, gate.GetPathTo(leaf));
+                        leaf.SetScript(GD.Load<Script>(script));
+                        // Found again: changing its script leaves the one above no longer usable.
+                        gate.GetNode(path).Set("OpenAngle", angle);
+                    }
+                }
+
                 gate.Transform = GlobalTransform.AffineInverse() * place;
                 AddBuilt(gate);
                 if (_material is not null && !GatesOwnMaterial.Contains(_kind))

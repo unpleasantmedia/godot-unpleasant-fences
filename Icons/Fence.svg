@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M96 176L128.0 128L160 176L160 544L96 544Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M288 176L320.0 128L352 176L352 544L288 544Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M480 176L512.0 128L544 176L544 544L480 544Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M160 256H288V304H160Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M352 256H480V304H352Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M160 416H288V464H160Z"/>
+<path fill-rule="evenodd" fill="rgb(214, 170, 120)" d="M352 416H480V464H352Z"/>
+</svg>

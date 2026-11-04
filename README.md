@@ -7,7 +7,7 @@ A fence plugin for Godot 4.7 (.NET version). Draw a `Fence` along points in the 
 - Seven kinds: Railing, Picket, Privacy, Chain Link, Wall, Barrier and Guard Rail
 - Click to add points, drag to move them, ctrl-click to delete, all undoable
 - Fences follow the ground, or anything solid under them
-- Gates in the middle of a stretch, using your own gate scenes
+- Gates in the middle of a stretch, for every kind but Barrier and Guard Rail
 - Points can snap to places your project gives, such as buildings' corners and roads' edges
 
 ## Requirements
@@ -51,14 +51,14 @@ internal static class FenceHook
         FenceLinks.Ground = static root => new MyGround(root);        // an IFenceGround
         FenceLinks.SnapPoints = static root => MyBuildingCorners(root);
         FenceLinks.SnapLines = static root => MyRoadEdges(root);
-        FenceLinks.GateFolder = "res://Scenes/Fences";
+        FenceLinks.GateScript = "res://Scripts/MyDoor.cs";            // gates as your own doors
     }
 }
 ```
 
 ## Gates
 
-A swinging gate needs a script of your own, so the plugin doesn't include gate scenes. Its gate leaf meshes are in `Meshes/`. Make a scene named `Fence-<Kind>-Gate.tscn` for each kind, such as `Fence-Picket-Gate.tscn`, and set `FenceLinks.GateFolder` to their folder. Without a scene, a gate is a gap in the fence.
+Gates come as scenes in `Scenes/`, with a `FenceGate` script on each leaf. Call `FenceGate.Toggle()` when the player uses one to swing it open or shut. To have gates work as your own doors, set `FenceLinks.GateScript` to your door script, which replaces `FenceGate` on each leaf. It has to be a script for an `AnimatableBody3D`.
 
 ## License
 

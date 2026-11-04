@@ -2,6 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
+uid="uid://767srt0sshk3"
+path="res://.godot/imported/Pencil.svg-c344a3b90ed884b39525ef0b99f7bf9e.ctex"
 metadata={
 "vram_texture": false
 }
@@ -9,6 +11,7 @@ metadata={
 [deps]
 
 source_file="res://addons/unpleasant_fences/Icons/Pencil.svg"
+dest_files=["res://.godot/imported/Pencil.svg-c344a3b90ed884b39525ef0b99f7bf9e.ctex"]
 
 [params]
 
