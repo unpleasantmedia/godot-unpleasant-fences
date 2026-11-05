@@ -14,6 +14,9 @@ internal static class FenceDrawDistance
 
     /// <summary>How far fences are drawn: a little further than other small things, being long.</summary>
     public const float Fences = 250f;
+
+    /// <summary>How far road barriers and guard rails are drawn, in metres: seen from further along a road.</summary>
+    public const float Barriers = 350f;
     private const float Margin = 10f;
 
     /// <summary>A node and everything drawn under it, drawn no further off than <see cref="Small"/>.</summary>

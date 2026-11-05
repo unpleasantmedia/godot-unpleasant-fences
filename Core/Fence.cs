@@ -238,7 +238,7 @@ public partial class Fence : Node3D
                 var from = (length - gateSpan) / 2f;
                 runs.Add((0f, from));
                 runs.Add((from + gateSpan, length));
-                var hinge = Foot(ToLocal(a + way * (from + spec.HalfPost)));
+                var hinge = Foot(ToLocal(a.Lerp(b, (from + spec.HalfPost) / length)));
                 gates.Add(new Transform3D(new Basis(way, Vector3.Up, way.Cross(Vector3.Up)), hinge));
             }
             else
@@ -250,7 +250,7 @@ public partial class Fence : Node3D
             {
                 var count = Mathf.Max(1, Mathf.CeilToInt((to - from) / spec.Spacing - 0.01f));
                 var feetAlong = Enumerable.Range(0, count + 1)
-                    .Select(k => k == 0 && from == 0f ? a : k == count && to == length ? b : Foot(ToLocal(a + way * Mathf.Lerp(from, to, (float)k / count))))
+                    .Select(k => k == 0 && from == 0f ? a : k == count && to == length ? b : Foot(ToLocal(a.Lerp(b, Mathf.Lerp(from, to, (float)k / count) / length))))
                     .ToList();
                 for (var k = 0; k < count; k++)
                 {
@@ -384,7 +384,7 @@ public partial class Fence : Node3D
     {
         AddChild(node, false, InternalMode.Back);
         // Not drawn from far off (see FenceDrawDistance).
-        FenceDrawDistance.LimitSmall(node, FenceDrawDistance.Fences);
+        FenceDrawDistance.LimitSmall(node, _kind is FenceKind.Barrier or FenceKind.GuardRail ? FenceDrawDistance.Barriers : FenceDrawDistance.Fences);
         return node;
     }
 
