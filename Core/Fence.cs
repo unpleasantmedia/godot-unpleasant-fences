@@ -55,7 +55,7 @@ public partial class Fence : Node3D
         [FenceKind.ChainLink] = (2.0f, 3.0f, 0.035f, 0.04f),
         [FenceKind.Wall] = (0.8f, 3.0f, 0.2f, 0.3f),
         [FenceKind.Barrier] = (0.81f, 3.0f, 0f, 0.6f),
-        [FenceKind.GuardRail] = (0.75f, 2.0f, 0.05f, 0.55f),
+        [FenceKind.GuardRail] = (0.75f, 4.0f, 0.05f, 0.55f),
     };
 
     /// <summary>Kinds with no posts (one block after another), and with no gates.</summary>
@@ -206,6 +206,7 @@ public partial class Fence : Node3D
         }
 
         var feet = _points.Select(Foot).ToArray();
+        var textured = Textured(_material ?? PieceMesh($"Fence-{_kind}-Section")?.SurfaceGetMaterial(0));
         var gateSet = _gates.ToHashSet();
         var gapSet = _gaps.ToHashSet();
         for (var s = 0; s < Stretches; s++)
@@ -257,8 +258,9 @@ public partial class Fence : Node3D
                     var p = feetAlong[k];
                     var q = feetAlong[k + 1];
                     // The metres of it between two posts, each leaning from one's foot to the other's: a metre piece stretched a little to fit.
+                    // Untextured, it looks the same as one piece stretched the whole way: one, for fewer triangles.
                     var span = ((q - p) with { Y = 0f }).Length();
-                    var metres = Mathf.Max(1, Mathf.RoundToInt(span));
+                    var metres = textured ? Mathf.Max(1, Mathf.RoundToInt(span)) : 1;
                     var across = way.Cross(Vector3.Up);
                     for (var m = 0; m < metres; m++)
                     {
@@ -400,9 +402,20 @@ public partial class Fence : Node3D
             var multi = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = chunk.Count };
             for (var i = 0; i < chunk.Count; i++)
                 multi.SetInstanceTransform(i, inverse * chunk[i]);
-            AddBuilt(new MultiMeshInstance3D { Name = piece, Multimesh = multi, MaterialOverride = material });
+            var drawn = AddBuilt(new MultiMeshInstance3D { Name = piece, Multimesh = multi, MaterialOverride = material });
+            // A guard rail's posts: small, many, and lost among the rail from further off; drawn only near.
+            if (_kind == FenceKind.GuardRail && piece.EndsWith("-Post"))
+                FenceDrawDistance.LimitNear(drawn);
         }
     }
+
+    /// <summary>Whether a material draws a texture (which a stretched piece would stretch); a shader's is taken to.</summary>
+    private static bool Textured(Material? material) => material switch
+    {
+        null => false,
+        BaseMaterial3D plain => plain.AlbedoTexture is not null || plain.NormalTexture is not null || plain.DetailAlbedo is not null,
+        _ => true,
+    };
 
     private static readonly Dictionary<string, Mesh?> PieceMeshes = new();
 
