@@ -132,7 +132,56 @@ public partial class Fence : Node3D
         // Once, a moment after it comes in: by then the roads and lots under it have their
         // collision, to stand on (built straight away, it stood on the bare ground, and had to
         // build again).
-        GetTree().CreateTimer(0.5).Connect(SceneTreeTimer.SignalName.Timeout, new Callable(this, MethodName.QueueBuild));
+        GetTree().CreateTimer(0.5).Connect(SceneTreeTimer.SignalName.Timeout, new Callable(this, MethodName.FirstBuild));
+    }
+
+    /// <summary>
+    /// Its first build: in the editor, at the end of the frame; in the game, in turn with the
+    /// others, a few each frame (all in one frame, they held the game up by a tenth of a second
+    /// just after it loaded).
+    /// </summary>
+    private void FirstBuild()
+    {
+        if (Engine.IsEditorHint())
+        {
+            QueueBuild();
+            return;
+        }
+
+        FirstBuilds.Enqueue(this);
+        if (FirstBuilds.Count == 1)
+            GetTree().Connect(SceneTree.SignalName.ProcessFrame, Callable.From(BuildSome), (uint)ConnectFlags.OneShot);
+    }
+
+    /// <summary>Fences waiting for their first build in the game, in the order they asked.</summary>
+    private static readonly Queue<Fence> FirstBuilds = new();
+
+    /// <summary>How long first builds may take in a frame, in milliseconds (at least one is built).</summary>
+    private const double FirstBuildBudget = 4.0;
+
+    /// <summary>Builds waiting fences until the frame's budget is spent, and the rest in frames after.</summary>
+    private static void BuildSome()
+    {
+        var start = Godot.Time.GetTicksUsec();
+        SceneTree? tree = null;
+        while (FirstBuilds.Count > 0)
+        {
+            var fence = FirstBuilds.Peek();
+            if (IsInstanceValid(fence) && fence.IsInsideTree())
+            {
+                if (tree is not null && (Godot.Time.GetTicksUsec() - start) / 1000.0 >= FirstBuildBudget)
+                    break;
+                tree = fence.GetTree();
+                fence.Build();
+            }
+
+            FirstBuilds.Dequeue();
+        }
+
+        if (FirstBuilds.Count > 0 && tree is not null)
+            tree.Connect(SceneTree.SignalName.ProcessFrame, Callable.From(BuildSome), (uint)ConnectFlags.OneShot);
+        else
+            FirstBuilds.Clear();
     }
 
     /// <summary>A setting changed: built again, but not as the scripts are reloaded.</summary>
