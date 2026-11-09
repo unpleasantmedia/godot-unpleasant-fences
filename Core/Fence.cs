@@ -115,6 +115,12 @@ public partial class Fence : Node3D
     [Export]
     public Material? Material { get => _material; set { _material = value; Changed(); } }
 
+    /// <summary>
+    /// Whether it is drawn: not where something else draws it (a road's baked look draws its guard
+    /// rails), leaving it only solid, with no nodes built to draw it. Set as it is made, in a game.
+    /// </summary>
+    public bool Drawn { get; set; } = true;
+
     /// <summary>Builds it again: after the ground or the roads under it have changed.</summary>
     [ExportToolButton("Rebuild", Icon = "Reload")]
     public Callable RebuildButton => Callable.From(Build);
@@ -293,18 +299,27 @@ public partial class Fence : Node3D
         // Each post solid, as each length of fence between them is.
         if (NoPosts.Contains(_kind))
             posts.Clear();
+        var sectionBoxes = boxes.Count;
         foreach (var post in posts)
             boxes.Add((post.Translated(Vector3.Up * (spec.Height / 2f)), new Vector3(spec.HalfPost * 2f, spec.Height, spec.HalfPost * 2f)));
 
         var name = _kind.ToString();
-        Instances($"Fence-{name}-Post", posts, _material);
-        Instances($"Fence-{name}-Section", sections, _material);
-        if (_kind == FenceKind.ChainLink)
-            Instances($"Fence-{name}-Mesh", sections, null);
+        if (Drawn)
+        {
+            Instances($"Fence-{name}-Post", posts, _material);
+            Instances($"Fence-{name}-Section", sections, _material);
+            if (_kind == FenceKind.ChainLink)
+                Instances($"Fence-{name}-Mesh", sections, null);
+        }
 
-        // All its boxes as one shape: a node and shape for each was most of the time it took to build.
-        var body = AddBuilt(new StaticBody3D { Name = "Body" });
-        if (boxes.Count > 0)
+        // In a game: solid in pieces near the camera (see SolidPieces).
+        FreeSolidPieces();
+        if (!Engine.IsEditorHint())
+            MakeSolidPieces(boxes, sectionBoxes);
+        // In the editor: all its boxes as one shape (a node and shape for each was most of the time it
+        // took to build), not in pieces: the editor never steps physics, and bodies made and let go of
+        // in numbers there wore it out (see SolidPieces).
+        else if (AddBuilt(new StaticBody3D { Name = "Body" }) is var body && boxes.Count > 0)
         {
             var inverse = GlobalTransform.AffineInverse();
             var faces = new Vector3[boxes.Count * BoxFaces.Length];
@@ -371,9 +386,130 @@ public partial class Fence : Node3D
         return [.. faces];
     }
 
-    /// <summary>Its solid parts (its body and its gates'), for rays to pass through it.</summary>
+    /// <summary>Its solid parts (its body and its gates', and in a game its pieces near the camera), for rays to pass through it.</summary>
     public IEnumerable<Rid> Bodies() =>
-        Built().SelectMany(n => n.FindChildren("*", "", true, false).Prepend(n)).OfType<CollisionObject3D>().Select(c => c.GetRid());
+        Built().SelectMany(n => n.FindChildren("*", "", true, false).Prepend(n)).OfType<CollisionObject3D>().Select(c => c.GetRid())
+            .Concat(_solid.Values.Select(p => p.Body));
+
+    // ---- Solid in pieces, in a game ----
+    //
+    // A fence along a road can run for kilometres: as one shape, the physics engine took a second to
+    // take it in, all at once, as the level came in. In a game it is solid instead in pieces, one for
+    // each SolidPiece-metre square of ground it crosses, and only those near the camera, a few more
+    // each frame as they come near (nearest first), let go of as they fall behind. A guard rail or
+    // barrier is solid as its rail: its posts (under the rail) and the ends of each length of it left
+    // out, which a car would meet anyway.
+
+    /// <summary>How big the squares are that it is solid in, in a game, in metres.</summary>
+    private const float SolidPiece = 100f;
+
+    /// <summary>How near the camera its pieces are solid, in metres; let go of past this and a margin more, so one at the edge does not come and go.</summary>
+    private const float SolidDistance = 1000f;
+    private const float SolidMargin = 200f;
+
+    /// <summary>How many pieces are made solid at most each frame.</summary>
+    private const int SolidPerFrame = 2;
+
+    /// <summary>
+    /// Its pieces: the square each covers, and its boxes (in the world), their faces worked out only
+    /// as the piece is made solid (all at once, they were tens of megabytes as the level came in).
+    /// </summary>
+    private readonly List<(Rect2 Area, List<(Transform3D Place, Vector3 Size)> Boxes)> _pieces = [];
+
+    /// <summary>Whether its pieces are solid as a rail (sides and top) rather than as whole boxes.</summary>
+    private bool _railPieces;
+
+    /// <summary>Its pieces now solid, by their place in that list.</summary>
+    private readonly Dictionary<int, (Rid Body, Rid Shape)> _solid = [];
+
+    private double _solidCheck;
+
+    /// <summary>Its boxes sorted into pieces, by the square of ground each is in: a rail's only (see above).</summary>
+    private void MakeSolidPieces(List<(Transform3D Place, Vector3 Size)> boxes, int sectionBoxes)
+    {
+        _pieces.Clear();
+        _railPieces = _kind is FenceKind.GuardRail or FenceKind.Barrier;
+        var squares = new Dictionary<(int X, int Z), List<(Transform3D, Vector3)>>();
+        for (var i = 0; i < (_railPieces ? sectionBoxes : boxes.Count); i++)
+        {
+            var origin = boxes[i].Place.Origin;
+            var key = (Mathf.FloorToInt(origin.X / SolidPiece), Mathf.FloorToInt(origin.Z / SolidPiece));
+            if (!squares.TryGetValue(key, out var list))
+                squares[key] = list = [];
+            list.Add(boxes[i]);
+        }
+
+        foreach (var ((x, z), list) in squares)
+            _pieces.Add((new Rect2(x * SolidPiece, z * SolidPiece, SolidPiece, SolidPiece), list));
+        _solidCheck = 0;
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_pieces.Count == 0 || (_solidCheck -= delta) > 0)
+            return;
+        _solidCheck = 0.25;
+        if (GetViewport()?.GetCamera3D() is not { } camera || GetWorld3D() is not { } world)
+            return;
+        var at = new Vector2(camera.GlobalPosition.X, camera.GlobalPosition.Z);
+        float Away(Rect2 area) => (at - at.Clamp(area.Position, area.End)).Length();
+
+        foreach (var i in _solid.Keys.Where(i => Away(_pieces[i].Area) > SolidDistance + SolidMargin).ToList())
+        {
+            PhysicsServer3D.FreeRid(_solid[i].Body);
+            PhysicsServer3D.FreeRid(_solid[i].Shape);
+            _solid.Remove(i);
+        }
+
+        var wanted = Enumerable.Range(0, _pieces.Count).Where(i => !_solid.ContainsKey(i) && Away(_pieces[i].Area) <= SolidDistance)
+            .OrderBy(i => Away(_pieces[i].Area)).Take(SolidPerFrame).ToList();
+        foreach (var i in wanted)
+        {
+            var corners = _railPieces ? RailFaces : BoxFaces;
+            var boxes = _pieces[i].Boxes;
+            var faces = new Vector3[boxes.Count * corners.Length];
+            var f = 0;
+            foreach (var (place, size) in boxes)
+            {
+                foreach (var corner in corners)
+                    faces[f++] = place * (corner * size);
+            }
+
+            var shape = PhysicsServer3D.ConcavePolygonShapeCreate();
+            PhysicsServer3D.ShapeSetData(shape, new Godot.Collections.Dictionary { ["faces"] = faces, ["backface_collision"] = true });
+            var body = PhysicsServer3D.BodyCreate();
+            PhysicsServer3D.BodySetMode(body, PhysicsServer3D.BodyMode.Static);
+            PhysicsServer3D.BodyAddShape(body, shape);
+            PhysicsServer3D.BodySetCollisionLayer(body, 1);
+            PhysicsServer3D.BodySetCollisionMask(body, 1);
+            // What a ray or contact finds: the fence.
+            PhysicsServer3D.BodyAttachObjectInstanceId(body, GetInstanceId());
+            // Its shape in it before it is in the world (one put in after rebuilds the body for each).
+            PhysicsServer3D.BodySetSpace(body, world.Space);
+            _solid[i] = (body, shape);
+        }
+
+        // Checked again next frame while some near it are still to be made solid.
+        if (wanted.Count == SolidPerFrame)
+            _solidCheck = 0;
+    }
+
+    private void FreeSolidPieces()
+    {
+        foreach (var (body, shape) in _solid.Values)
+        {
+            PhysicsServer3D.FreeRid(body);
+            PhysicsServer3D.FreeRid(shape);
+        }
+
+        _solid.Clear();
+        _pieces.Clear();
+    }
+
+    public override void _ExitTree() => FreeSolidPieces();
+
+    /// <summary>A rail's faces, of a box from -0.5 to 0.5 along it: its two sides and its top.</summary>
+    private static readonly Vector3[] RailFaces = [.. BoxFaces.Skip(2 * 6).Take(6), .. BoxFaces.Skip(4 * 6).Take(12)];
 
     /// <summary>What it has built: its internal children (kept through script reloads, unlike a list of them).</summary>
     private IEnumerable<Node> Built()
