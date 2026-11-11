@@ -385,9 +385,52 @@ public partial class FencesPlugin : EditorPlugin
     // ------------------------------------------------------------------ where
 
     /// <summary>Every fence in the scene.</summary>
+
+    /// <summary>
+    /// A fence's points in the world, kept from one redraw to the next: worked out again only when its
+    /// points (a new list each time they change) or its place change, not every time the view is drawn.
+    /// </summary>
+    private Vector3[] WorldPoints(Fence fence)
+    {
+        var points = fence.Points;
+        var place = fence.GlobalTransform;
+        if (_world.TryGetValue(fence, out var kept) && ReferenceEquals(kept.Points, points) && kept.Place.IsEqualApprox(place))
+            return kept.World;
+        var world = new Vector3[points.Length];
+        var bounds = new Aabb();
+        for (var i = 0; i < points.Length; i++)
+        {
+            world[i] = place * points[i];
+            bounds = i == 0 ? new Aabb(world[i], Vector3.Zero) : bounds.Expand(world[i]);
+        }
+
+        _world[fence] = (points, place, world);
+        _worldBounds[fence] = bounds;
+        return world;
+    }
+
+    private readonly Dictionary<Fence, (Vector3[] Points, Transform3D Place, Vector3[] World)> _world = [];
+    private readonly Dictionary<Fence, Aabb> _worldBounds = [];
+
+    /// <summary>How far from the camera other fences are drawn while drawing one, in metres.</summary>
+    private const float OtherFencesReach = 1000f;
+
+    /// <summary>The bodies of every fence but the one being drawn, for the mouse's ray to pass through (see Hover).</summary>
+    private List<Rid>? _otherBodies;
+
+    private Fence? _otherBodiesFor;
+
     private List<Fence> Fences()
     {
-        _fences ??= EditorInterface.Singleton.GetEditedSceneRoot()?.FindChildren("*", "", true, false).OfType<Fence>().ToList() ?? new List<Fence>();
+        if (_fences is null)
+        {
+            _otherBodies = null;
+            _world.Clear();
+            _worldBounds.Clear();
+        }
+        // Only fences of the scene, to be edited: not those built by something else as part of itself
+        // (a road's guard rails and barriers, unowned, not saved), which are many and long.
+        _fences ??= EditorInterface.Singleton.GetEditedSceneRoot()?.FindChildren("*", "", true, false).OfType<Fence>().Where(f => f.Owner is not null).ToList() ?? new List<Fence>();
         _fences.RemoveAll(f => !IsInstanceValid(f) || !f.IsInsideTree());
         return _fences;
     }
@@ -436,7 +479,18 @@ public partial class FencesPlugin : EditorPlugin
         var query = PhysicsRayQueryParameters3D.Create(from, from + way * camera.Far);
         // Through fences, onto what they stand on.
         var root = EditorInterface.Singleton.GetEditedSceneRoot();
-        query.Exclude = new Godot.Collections.Array<Rid>(Fences().SelectMany(f => f.Bodies()));
+        // The other fences' bodies gathered once while drawing (gone through on every move of the mouse,
+        // every piece of every fence in a level, it slowed drawing right down); the one drawn, as it is now.
+        var drawn = SelectedFence;
+        if (_otherBodies is null || _otherBodiesFor != drawn)
+        {
+            // Every fence's, a road's guard rails and barriers too (not drawn to edit, but not to be stood on either).
+            Fences();
+            _otherBodies = (root?.FindChildren("*", "", true, false).OfType<Fence>() ?? []).Where(f => f != drawn).SelectMany(f => f.Bodies()).ToList();
+            _otherBodiesFor = drawn;
+        }
+
+        query.Exclude = new Godot.Collections.Array<Rid>(drawn is null ? _otherBodies : _otherBodies.Concat(drawn.Bodies()));
         var result = camera.GetWorld3D().DirectSpaceState.IntersectRay(query);
         if (result.Count > 0)
             hit = result["position"].AsVector3();
@@ -451,18 +505,66 @@ public partial class FencesPlugin : EditorPlugin
         var corner = _corners.Where(c => Flat(c - at).Length() < SnapReach).OrderBy(c => Flat(c - at).Length()).Cast<Vector3?>().FirstOrDefault();
         if (corner is { } c)
             return (c with { Y = at.Y }, true);
-        _edges ??= root is not null && FenceLinks.SnapLines is { } lines ? [.. lines(root)] : [];
+        if (_edges is null || _edgeGrid is null)
+        {
+            _edges = root is not null && FenceLinks.SnapLines is { } lines ? [.. lines(root)] : [];
+            _edgeGrid = EdgeGrid(_edges);
+        }
+
+        // Only the edges in the squares near it (gone through all of them on every move of the mouse,
+        // tens of thousands of a level's roads, it took a good part of a frame).
         Vector3? best = null;
         var bestDistance = SnapReach;
-        foreach (var (a, b) in _edges)
+        var (fromX, fromZ) = EdgeSquare(at.X - SnapReach, at.Z - SnapReach);
+        var (toX, toZ) = EdgeSquare(at.X + SnapReach, at.Z + SnapReach);
+        for (var x = fromX; x <= toX; x++)
         {
-            var on = Geometry3D.GetClosestPointToSegment(at, a, b);
-            var distance = Flat(on - at).Length();
-            if (distance < bestDistance)
-                (best, bestDistance) = (on, distance);
+            for (var z = fromZ; z <= toZ; z++)
+            {
+                if (!_edgeGrid.TryGetValue((x, z), out var near))
+                    continue;
+                foreach (var i in near)
+                {
+                    var (a, b) = _edges[i];
+                    var on = Geometry3D.GetClosestPointToSegment(at, a, b);
+                    var distance = Flat(on - at).Length();
+                    if (distance < bestDistance)
+                        (best, bestDistance) = (on, distance);
+                }
+            }
         }
 
         return best is { } edge ? (edge, true) : (at, false);
+    }
+
+    /// <summary>How far across each square of the road edges' lookup is, in metres.</summary>
+    private const float EdgeSquareSize = 32f;
+
+    /// <summary>The road edges by the squares they cross, as their places in <see cref="_edges"/>.</summary>
+    private Dictionary<(int, int), List<int>>? _edgeGrid;
+
+    private static (int, int) EdgeSquare(float x, float z) => ((int)System.MathF.Floor(x / EdgeSquareSize), (int)System.MathF.Floor(z / EdgeSquareSize));
+
+    private static Dictionary<(int, int), List<int>> EdgeGrid(List<(Vector3 A, Vector3 B)> edges)
+    {
+        var grid = new Dictionary<(int, int), List<int>>();
+        for (var i = 0; i < edges.Count; i++)
+        {
+            var (a, b) = edges[i];
+            var (fromX, fromZ) = EdgeSquare(System.MathF.Min(a.X, b.X), System.MathF.Min(a.Z, b.Z));
+            var (toX, toZ) = EdgeSquare(System.MathF.Max(a.X, b.X), System.MathF.Max(a.Z, b.Z));
+            for (var x = fromX; x <= toX; x++)
+            {
+                for (var z = fromZ; z <= toZ; z++)
+                {
+                    if (!grid.TryGetValue((x, z), out var list))
+                        grid[(x, z)] = list = [];
+                    list.Add(i);
+                }
+            }
+        }
+
+        return grid;
     }
 
     private static Vector3 Flat(Vector3 v) => v with { Y = 0f };
@@ -484,35 +586,47 @@ public partial class FencesPlugin : EditorPlugin
             return;
         var fence = SelectedFence;
         Vector2? Screen(Vector3 at) => camera.IsPositionBehind(at) ? null : camera.UnprojectPosition(at);
-        // The other fences faintly, to be clicked to edit.
+        // The other fences faintly, to be clicked to edit: those near enough to click (each fence's
+        // points read once; read for every stretch, a long fence's were copied over and over, and
+        // every fence in a level drawn made the view crawl).
+        var eye = camera.GlobalPosition;
+        var faint = new Color(1f, 1f, 1f, 0.35f);
+        var faintDot = new Color(1f, 1f, 1f, 0.5f);
         foreach (var other in Fences().Where(f => f != fence))
         {
-            for (var s = 0; s < other.Stretches; s++)
+            if (WorldPoints(other) is not { Length: > 0 } world || !_worldBounds[other].Grow(OtherFencesReach).HasPoint(eye))
+                continue;
+            var stretches = other.Stretches;
+            for (var s = 0; s < stretches; s++)
             {
-                if (Screen(other.ToGlobal(other.Points[s])) is { } a && Screen(other.ToGlobal(other.Points[(s + 1) % other.Points.Length])) is { } b)
-                    overlay.DrawLine(a, b, new Color(1f, 1f, 1f, 0.35f), 1.5f);
+                if (Screen(world[s]) is { } a && Screen(world[(s + 1) % world.Length]) is { } b)
+                    overlay.DrawLine(a, b, faint, 1.5f);
             }
 
-            foreach (var point in other.Points)
+            foreach (var at in world)
             {
-                if (Screen(other.ToGlobal(point)) is { } p)
-                    overlay.DrawCircle(p, 3f, new Color(1f, 1f, 1f, 0.5f));
+                if (Screen(at) is { } p)
+                    overlay.DrawCircle(p, 3f, faintDot);
             }
         }
 
         if (fence is not null)
         {
-            for (var s = 0; s < fence.Stretches; s++)
+            var points = fence.Points;
+            var gates = fence.Gates;
+            var place = fence.GlobalTransform;
+            var stretches = fence.Stretches;
+            for (var s = 0; s < stretches; s++)
             {
-                if (Screen(fence.ToGlobal(fence.Points[s])) is { } a && Screen(fence.ToGlobal(fence.Points[(s + 1) % fence.Points.Length])) is { } b)
-                    overlay.DrawLine(a, b, fence.Gates.Contains(s) ? new Color(1f, 0.6f, 0.2f) : new Color(1f, 1f, 1f, 0.8f), 2f);
+                if (Screen(place * points[s]) is { } a && Screen(place * points[(s + 1) % points.Length]) is { } b)
+                    overlay.DrawLine(a, b, gates.Contains(s) ? new Color(1f, 0.6f, 0.2f) : new Color(1f, 1f, 1f, 0.8f), 2f);
             }
 
-            for (var i = 0; i < fence.Points.Length; i++)
+            for (var i = 0; i < points.Length; i++)
             {
-                if (Screen(fence.ToGlobal(fence.Points[i])) is not { } p)
+                if (Screen(place * points[i]) is not { } p)
                     continue;
-                var picked = i == (_fromStart ? 0 : _after < 0 ? fence.Points.Length - 1 : _after) && !_finished;
+                var picked = i == (_fromStart ? 0 : _after < 0 ? points.Length - 1 : _after) && !_finished;
                 overlay.DrawCircle(p, picked ? 7f : 5f, picked ? new Color(0.3f, 0.8f, 1f) : Colors.White);
                 overlay.DrawArc(p, picked ? 7f : 5f, 0f, Mathf.Tau, 16, Colors.Black, 1f);
             }
